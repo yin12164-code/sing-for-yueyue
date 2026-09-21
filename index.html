@@ -638,18 +638,18 @@ window.__cakeNote=function(n){
 </script></body><script id="yueyue-tracker">
 /* ============================================================
    月月的收信口 · 航航专属
-   把月月在这张页面上的每一次心动，悄悄寄回给航航。
-   未填写配置时完全静默，不会外发任何数据。
+   仅保存月月主动提交的愿望、心情与评分，并通过邮件寄给航航。
+   不收集定位、IP 或其他额外个人信息。
    ============================================================ */
 (function () {
   "use strict";
 
-  /* ---------- ① 配置区：把下面三项填满即可（见「配置指南.md」） ---------- */
+  /* ---------- ① Supabase 公开配置 ---------- */
   var CFG = {
-    supabaseUrl: "",   // 例：https://abcdefghijkl.supabase.co
-    supabaseKey: "",   // Supabase 的 anon public key
-    pushType: "",      // 填 "serverchan" 或 "pushplus"，留空则不推微信
-    pushKey: ""        // 对应服务拿到的 SendKey / token
+    supabaseUrl: "https://jyhpodgryizzeuskssqd.supabase.co",
+    supabaseKey: "sb_publishable_xBkQ6nMN85Lb0QHwcEoetg_2Rv8ikq0",
+    pushType: "",
+    pushKey: ""
   };
   var TABLE = "yueyue_hearts";
 
@@ -678,6 +678,16 @@ window.__cakeNote=function(n){
     return null;
   }
   function q(sel) { return document.querySelector(sel); }
+
+  function addDisclosure() {
+    var card = q(".intro-card");
+    if (!card || q("#yyPrivacyNote")) return;
+    var note = document.createElement("p");
+    note.id = "yyPrivacyNote";
+    note.textContent = "进入后，你主动提交的心情、评分和愿望会私密寄给航航；页面不会收集定位或其他额外个人信息。";
+    note.style.cssText = "max-width:520px;margin:18px auto 0;color:rgba(244,234,245,.72);font:12px/1.8 system-ui";
+    card.appendChild(note);
+  }
 
   /* ---------- ③ 写入数据库 ---------- */
   function save(kind, detail, meta) {
@@ -723,37 +733,17 @@ window.__cakeNote=function(n){
     } catch (e) {}
   }
 
+  var recentReports = {};
   function report(kind, detail, meta, title, body) {
+    var signature = kind + "|" + String(detail || "");
+    var sentAt = recentReports[signature] || 0;
+    if (Date.now() - sentAt < 1500) return;
+    recentReports[signature] = Date.now();
     save(kind, detail, meta);
     push(kind, title, body);
   }
 
-  /* ---------- ⑤ 打开网页 ---------- */
-  var openedAt = Date.now(), lastLeaveAt = 0;
-
-  function onOpen() {
-    report("open", "打开了网页", {
-      device: device(),
-      screen: (window.innerWidth || 0) + "x" + (window.innerHeight || 0),
-      from: document.referrer || "直接打开"
-    }, "月月打开网页了 💗", "**" + nowStr() + "**\n\n月月刚刚打开了你写给她的页面。\n\n设备：" + device());
-  }
-
-  function flush(force) {
-    var secs = Math.round((Date.now() - openedAt) / 1000);
-    if (secs < 3) return;
-    var t = Date.now();
-    if (!force && t - lastLeaveAt < 30000) return;   // 切来切去时不刷屏
-    lastLeaveAt = t;
-    openedAt = Date.now();
-    save("leave", "停留 " + secs + " 秒", { seconds: secs, device: device() });
-  }
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "hidden") flush(false);
-  });
-  window.addEventListener("pagehide", function () { flush(true); });
-
-  /* ---------- ⑥ 点开开场页（她真的进来了） ---------- */
+  /* ---------- ⑤ 点开开场页（明确进入后才通知） ---------- */
   document.addEventListener("click", function (e) {
     var b = near(e.target, ".open");
     if (!b) return;
@@ -762,23 +752,7 @@ window.__cakeNote=function(n){
       "**" + nowStr() + "**\n\n月月点下了「" + (b.textContent || "").trim() + "」，开始读你们的十年。");
   }, true);
 
-  /* ---------- ⑦ 点亮生日蜡烛 ---------- */
-  var lastLit = -1;
-  document.addEventListener("click", function (e) {
-    if (!near(e.target, "#birthdayCard .candle")) return;
-    setTimeout(function () {
-      var lit = document.querySelectorAll("#birthdayCard .candle.lit").length;
-      if (lit === lastLit) return;
-      lastLit = lit;
-      save("candle", "点亮蜡烛 " + lit + "/5", { lit: lit });
-      if (lit === 5) {
-        push("candle", "五支蜡烛都亮了 🕯️",
-          "**" + nowStr() + "**\n\n月月把五支蜡烛全点亮了，接下来该许愿了。");
-      }
-    }, 80);
-  }, true);
-
-  /* ---------- ⑧ 生日愿望 ---------- */
+  /* ---------- ⑥ 生日愿望 ---------- */
   function grabBirthday() {
     var el = q("#birthdayWish");
     var v = el ? String(el.value || "").trim() : "";
@@ -792,7 +766,7 @@ window.__cakeNote=function(n){
     if (near(e.target, "#makeBirthdayWish")) grabBirthday();
   }, true);
 
-  /* ---------- ⑨ 烟花愿望 ---------- */
+  /* ---------- ⑦ 烟花愿望 ---------- */
   function grabFirework() {
     var el = q("#wishInput");
     var v = el ? String(el.value || "").trim() : "";
@@ -813,7 +787,7 @@ window.__cakeNote=function(n){
     else if (e.target.id === "wishInput") grabFirework();
   }, true);
 
-  /* ---------- ⑩ 对航航的打分 ---------- */
+  /* ---------- ⑧ 对航航的打分 ---------- */
   document.addEventListener("click", function (e) {
     var s = near(e.target, "#ratingStars .rate-star");
     if (!s) return;
@@ -825,7 +799,7 @@ window.__cakeNote=function(n){
       "**" + nowStr() + "**\n\n月月今天对航航的打分：**" + n + " 分** " + star);
   }, true);
 
-  /* ---------- ⑪ 月月的专属天气 ---------- */
+  /* ---------- ⑨ 月月的专属天气 ---------- */
   var MOOD_CN = {
     sun: "今天很开心", rain: "今天有点累", cloud: "今天想安静一下",
     moon: "今天需要一个抱抱", angry: "航航真笨，今天做错事情了",
@@ -841,13 +815,9 @@ window.__cakeNote=function(n){
       "**" + nowStr() + "**\n\n月月选择了：**" + cn + "**\n\n该想想怎么接住她了。");
   }, true);
 
-  /* ---------- 启动 ---------- */
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", onOpen);
-  } else {
-    onOpen();
-  }
-  if (!LIVE && !PUSH) {
+  /* ---------- 启动检查 ---------- */
+  addDisclosure();
+  if (!LIVE) {
     try { console.info("[收信口] 尚未配置，月月看不到任何异常，数据也不会外发。"); } catch (e) {}
   }
 })();
